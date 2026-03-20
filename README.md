@@ -15,7 +15,7 @@ Multithreading - partially
 
 GUI - ❌
 
-Terminal - ❌
+Terminal - ✅
 
 Neural network - ✅
 
