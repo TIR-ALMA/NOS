@@ -9,6 +9,8 @@
 #include "lib/string.h"
 #include "lib/printf.h"
 #include "liquid_nn.h"
+#include "simple_terminal.h"
+
 
 struct process processes[MAX_PROCESSES];
 struct process *current_process = NULL;
@@ -42,8 +44,7 @@ void kernel_main() {
     // Enable interrupts
     __asm__ volatile("sti");
 
-    // Start scheduling
-    schedule();
+    simple_terminal_run();
 }
 
 void schedule() {
