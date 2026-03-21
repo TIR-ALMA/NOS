@@ -1,0 +1,183 @@
+// drivers/network/i8254x.h
+#ifndef _DRIVERS_NETWORK_I8254X_H
+#define _DRIVERS_NETWORK_I8254X_H
+
+#include "types.h"
+#include "mm.h"
+#include "lib/string.h"
+#include "drivers/pci.h"
+#include "lib/printf.h"
+
+// Register offsets
+#define I8254X_REG_CTRL     0x0000
+#define I8254X_REG_STATUS   0x0008
+#define I8254X_REG_CTRLEXT  0x0018
+#define I8254X_REG_MDIC     0x0020
+#define I8254X_REG_FCAL     0x0028
+#define I8254X_REG_FCAH     0x002C
+#define I8254X_REG_FCT      0x0030
+#define I8254X_REG_VET      0x0038
+#define I8254X_REG_ICR      0x00C0
+#define I8254X_REG_ITR      0x00C4
+#define I8254X_REG_ICS      0x00C8
+#define I8254X_REG_IMS      0x00D0
+#define I8254X_REG_IMC      0x00D8
+#define I8254X_REG_RCTL     0x0100
+#define I8254X_REG_FCTTV    0x0170
+#define I8254X_REG_TXCW     0x0178
+#define I8254X_REG_RXCW     0x0180
+#define I8254X_REG_TCTL     0x0400
+#define I8254X_REG_TIPG     0x0410
+#define I8254X_REG_LEDCTL   0x0E00
+#define I8254X_REG_PBA      0x1000
+#define I8254X_REG_RDBAL    0x2800
+#define I8254X_REG_RDBAH    0x2804
+#define I8254X_REG_RDLEN    0x2808
+#define I8254X_REG_RDH      0x2810
+#define I8254X_REG_RDT      0x2818
+#define I8254X_REG_RDTR     0x2820
+#define I8254X_REG_RXDCTL   0x3828
+#define I8254X_REG_RADV     0x282C
+#define I8254X_REG_RSRPD    0x2C00
+#define I8254X_REG_TXDMAC   0x3000
+#define I8254X_REG_TDBAL    0x3800
+#define I8254X_REG_TDBAH    0x3804
+#define I8254X_REG_TDLEN    0x3808
+#define I8254X_REG_TDH      0x3810
+#define I8254X_REG_TDT      0x3818
+#define I8254X_REG_TIDV     0x3820
+#define I8254X_REG_TXDCTL   0x3828
+#define I8254X_REG_TADV     0x382C
+#define I8254X_REG_TSPMT    0x3830
+#define I8254X_REG_RXCSUM   0x5000
+
+// Register values
+#define I8254X_CTRL_FD      0x00000001
+#define I8254X_CTRL_LRST    0x00000008
+#define I8254X_CTRL_ASDE    0x00000020
+#define I8254X_CTRL_SLU     0x00000040
+#define I8254X_CTRL_ILOS    0x00000080
+#define I8254X_CTRL_SPEED_MASK  0x00000300
+#define I8254X_CTRL_SPEED_SHIFT 8
+#define I8254X_CTRL_FRCSPD  0x00000800
+#define I8254X_CTRL_FRCDPLX 0x00001000
+#define I8254X_CTRL_RST     0x04000000
+#define I8254X_CTRL_RFCE    0x08000000
+#define I8254X_CTRL_TFCE    0x10000000
+#define I8254X_CTRL_VME     0x40000000
+#define I8254X_CTRL_PHY_RST 0x80000000
+
+#define I8254X_STATUS_FD    0x00000001
+#define I8254X_STATUS_LU    0x00000002
+#define I8254X_STATUS_TXOFF 0x00000010
+#define I8254X_STATUS_TBIMODE   0x00000020
+#define I8254X_STATUS_SPEED_MASK    0x000000C0
+#define I8254X_STATUS_SPEED_SHIFT   6
+#define I8254X_STATUS_ASDV_MASK     0x00000300
+#define I8254X_STATUS_ASDV_SHIFT    8
+#define I8254X_STATUS_PCI66   0x00000800
+#define I8254X_STATUS_BUS64   0x00001000
+#define I8254X_STATUS_PCIX_MODE     0x00002000
+#define I8254X_STATUS_PCIXSPD_MASK  0x0000C000
+#define I8254X_STATUS_PCIXSPD_SHIFT 14
+
+#define I8254X_RCTL_EN      0x00000002
+#define I8254X_RCTL_SBP     0x00000004
+#define I8254X_RCTL_UPE     0x00000008
+#define I8254X_RCTL_MPE     0x00000010
+#define I8254X_RCTL_LPE     0x00000020
+#define I8254X_RCTL_LBM_MASK    0x000000C0
+#define I8254X_RCTL_LBM_SHIFT   6
+#define I8254X_RCTL_RDMTS_MASK  0x00000300
+#define I8254X_RCTL_RDMTS_SHIFT 8
+#define I8254X_RCTL_MO_MASK     0x00003000
+#define I8254X_RCTL_MO_SHIFT    12
+#define I8254X_RCTL_BAM     0x00008000
+#define I8254X_RCTL_BSIZE_MASK  0x00030000
+#define I8254X_RCTL_BSIZE_SHIFT 16
+#define I8254X_RCTL_VFE     0x00040000
+#define I8254X_RCTL_CFIEN   0x00080000
+#define I8254X_RCTL_CFI     0x00100000
+#define I8254X_RCTL_DPF     0x00400000
+#define I8254X_RCTL_PMCF    0x00800000
+#define I8254X_RCTL_BSEX    0x02000000
+#define I8254X_RCTL_SECRC   0x04000000
+
+#define I8254X_TCTL_EN      0x00000002
+#define I8254X_TCTL_PSP     0x00000008
+#define I8254X_TCTL_SWXOFF  0x00400000
+
+#define I8254X_ICR_TXDW     0x00000001
+#define I8254X_ICR_TXQE     0x00000002
+#define I8254X_ICR_LSC      0x00000004
+#define I8254X_ICR_RXSEQ    0x00000008
+#define I8254X_ICR_RXDMT0   0x00000010
+#define I8254X_ICR_RXO      0x00000040
+#define I8254X_ICR_RXT0     0x00000080
+#define I8254X_ICR_MDAC     0x00000200
+#define I8254X_ICR_RXCFG    0x00000400
+#define I8254X_ICR_PHY_INT  0x00001000
+#define I8254X_ICR_GPI_SDP6 0x00002000
+#define I8254X_ICR_GPI_SDP7 0x00004000
+#define I8254X_ICR_TXD_LOW  0x00008000
+#define I8254X_ICR_SRPD     0x00010000
+
+#define I8254X_TXDESC_IDE   0x80000000
+#define I8254X_TXDESC_VLE   0x40000000
+#define I8254X_TXDESC_DEXT  0x20000000
+#define I8254X_TXDESC_RPS   0x10000000
+#define I8254X_TXDESC_RS    0x08000000
+#define I8254X_TXDESC_IC    0x04000000
+#define I8254X_TXDESC_IFCS  0x02000000
+#define I8254X_TXDESC_EOP   0x01000000
+#define I8254X_TXDESC_TU    0x00000008
+#define I8254X_TXDESC_LC    0x00000004
+#define I8254X_TXDESC_EC    0x00000002
+#define I8254X_TXDESC_DD    0x00000001
+
+#define I8254X_RXDESC_PIF   0x00000080
+#define I8254X_RXDESC_IPCS  0x00000040
+#define I8254X_RXDESC_TCPCS 0x00000020
+#define I8254X_RXDESC_VP    0x00000008
+#define I8254X_RXDESC_IXSM  0x00000004
+#define I8254X_RXDESC_EOP   0x00000002
+#define I8254X_RXDESC_DD    0x00000001
+
+#define I8254X_MAX_PKT_SIZE 16384
+
+// Descriptor structures
+struct i8254x_tx_desc {
+    uint64_t addr;
+    uint16_t length;
+    uint8_t cso;
+    uint8_t cmd;
+    uint8_t status;
+    uint8_t css;
+    uint16_t special;
+};
+
+struct i8254x_rx_desc {
+    uint64_t addr;
+    uint16_t length;
+    uint16_t checksum;
+    uint8_t status;
+    uint8_t errors;
+    uint16_t special;
+};
+
+// Global variables
+extern uint32_t os_NetIOBaseMem;
+extern uint8_t os_NetIRQ;
+extern uint8_t os_NetMAC[6];
+extern uint8_t os_eth_rx_buffer[];
+extern uint8_t os_eth_tx_buffer[];
+
+// Function prototypes
+void i8254x_init(uint8_t bus, uint8_t slot);
+void i8254x_reset(void);
+void i8254x_transmit(void* packet, uint32_t length);
+uint32_t i8254x_poll(void* packet);
+uint32_t i8254x_ack_int(void);
+
+#endif // _DRIVERS_NETWORK_I8254X_H
+
