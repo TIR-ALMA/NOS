@@ -6,15 +6,17 @@
 #include "drivers/keyboard.h"
 #include "drivers/timer.h"
 #include "drivers/disk.h"
+#include "drivers/network/i8254x.h"
 #include "lib/string.h"
 #include "lib/printf.h"
 #include "liquid_nn.h"
 #include "simple_terminal.h"
 
-
 struct process processes[MAX_PROCESSES];
 struct process *current_process = NULL;
 struct process *process_queue = NULL;
+
+void find_and_init_network_card(void);
 
 void kernel_main() {
     vga_init();
@@ -25,6 +27,9 @@ void kernel_main() {
     vfs_init();
     timer_init();
     keyboard_init();
+    
+    // Инициализация сетевой карты
+    find_and_init_network_card();
     
     // Инициализация Liquid Neural Network
     liquid_init();
@@ -268,7 +273,7 @@ void isr16();
 void isr17();
 void isr18();
 void isr19();
-void isr20();
+20();
 void isr21();
 void isr22();
 void isr23();
@@ -280,18 +285,42 @@ void isr28();
 void isr29();
 void isr30();
 void isr31();
-```
 
-```c
-// interrupts.c
-#include "types.h"
-#include "sched.h"
-#include "drivers/timer.h"
-#include "drivers/keyboard.h"
-#include "lib/printf.h"
-#include "mm.h"
-#include "lib/stdarg.h"
-#include "liquid_nn.h"
+void find_and_init_network_card() {
+    // Search through PCI devices for Intel 8254x NIC
+    // Vendor ID for Intel: 0x8086
+    for(uint8_t bus = 0; bus < 256; bus++) {
+        for(uint8_t device = 0; device < 32; device++) {
+            uint32_t vendor_device = pci_read_reg(bus, device, 0, 0x00);
+            uint16_t vendor_id = vendor_device & 0xFFFF;
+            uint16_t device_id = vendor_device >> 16;
+            
+            // Check if it's an Intel 8254x device
+            if(vendor_id == 0x8086 && 
+               (device_id == 0x100E || device_id == 0x100F || 
+                device_id == 0x1013 || device_id == 0x1014 ||
+                device_id == 0x1015 || device_id == 0x1016 ||
+                device_id == 0x1017 || device_id == 0x1018 ||
+                device_id == 0x1019 || device_id == 0x101A ||
+                device_id == 0x101D || device_id == 0x101E ||
+                device_id == 0x1026 || device_id == 0x1027 ||
+                device_id == 0x1028 || device_id == 0x1079 ||
+                device_id == 0x107A || device_id == 0x107B ||
+                device_id == 0x107C || device_id == 0x107D ||
+                device_id == 0x107E || device_id == 0x107F ||
+                device_id == 0x1096 || device_id == 0x1098 ||
+                device_id == 0x1099 || device_id == 0x1010 ||
+                device_id == 0x1012 || device_id == 0x1011 ||
+                device_id == 0x101E || device_id == 0x101F)) {
+                
+                printf("Found Intel 8254x NIC at %d:%d\n", bus, device);
+                i8254x_init(bus, device);
+                return;
+            }
+        }
+    }
+    printf("No Intel 8254x NIC found\n");
+}
 
 void timer_interrupt_handler() {
     if(current_process) {
@@ -314,6 +343,9 @@ void interrupt_handler(int int_no, struct registers *regs) {
             break;
         case 0x21: // Keyboard interrupt
             keyboard_interrupt_handler();
+            break;
+        case 0x23: // IRQ11 - предполагаем, что сетевая карта использует IRQ 11
+            i8254x_interrupt_handler();
             break;
         case 0xE: // Page fault
             extern void page_fault_handler(uint64_t error_code, vaddr_t fault_addr);
@@ -532,7 +564,7 @@ void handle_syscall(struct registers *regs) {
             regs->rax = sys_rt_sigsuspend((const sigset_t*)regs->rdi, regs->rsi);
             break;
         case 67: // sys_rt_sigpending
-            regs->rax = sys_rt_sigpending((sigset_t*)regs->rdi, regs->rsi);
+            regs->rax = sys_rt_sigpending((sigset_t*)regs->rsi, (sigset_t*)regs->rdx);
             break;
         case 68: // sys_rt_sigtimedwait
             regs->rax = sys_rt_sigtimedwait((const sigset_t*)regs->rdi, (siginfo_t*)regs->rsi, (const struct timespec*)regs->rdx, regs->r10);
@@ -568,7 +600,7 @@ void handle_syscall(struct registers *regs) {
             regs->rax = sys_sysinfo((struct sysinfo*)regs->rdi);
             break;
         case 81: // sys_times
-            regs->rax = sys_times((struct tms*)regs->rdi);
+            regs->rax = sys_times((struct tms*)regs->rsi);
             break;
         case 82: // sys_ptrace
             regs->rax = sys_ptrace(regs->rdi, regs->rsi, (void*)regs->rdx, (void*)regs->r10);
@@ -769,7 +801,7 @@ void handle_syscall(struct registers *regs) {
             regs->rax = sys_query_module((char*)regs->rdi, regs->rsi, (void*)regs->rdx, regs->r10, (size_t*)regs->r8);
             break;
         case 148: // sys_quotactl
-            regs->rax = sys_quotactl(regs->rdi, (char*)regs->rsi, regs->rdx, (void*)regs->r10);
+            regs->rax = sys_quotactl(regs->rdi, (char*)regs->rdi, regs->rsi, regs->rdx, (void*)regs->r10);
             break;
         case 149: // sys_nfsservctl
             regs->rax = sys_nfsservctl(regs->rdi, (struct nfsctl_arg*)regs->rsi, (void*)regs->rdx);
@@ -895,8 +927,7 @@ void handle_syscall(struct registers *regs) {
             regs->rax = sys_fadvise64(regs->rdi, regs->rsi, regs->rdx, regs->r10);
             break;
         case 191: // sys_timer_create
-            regs->rax = sys_timer_create(regs->rdi, (struct sigevent*)regs->rsi, (timer_t*)regs->rdx);
-            break;
+            regs->rax = sys_timer_create(regs->rdi, (struct sigevent*)regs->rsi, (timer_t*)regs-> break;
         case 192: // sys_timer_settime
             regs->rax = sys_timer_settime(regs->rdi, regs->rsi, (const struct itimerspec*)regs->rdx, (struct itimerspec*)regs->r8);
             break;
@@ -1024,7 +1055,7 @@ void handle_syscall(struct registers *regs) {
             regs->rax = sys_renameat(regs->rdi, (char*)regs->rsi, regs->rdx, (char*)regs->r10);
             break;
         case 234: // sys_linkat
-            regs->rax = sys_linkat(regs->rdi, (char*)regs->rsi, regs->rdx, (char*)regs->r10, regs->r8);
+            regs->rax = sys_linkat(regs->rdi, (char*)regs->rsi, (char*)regs->rdx, (char*)regs->r10, regs->r8);
             break;
         case 235: // sys_symlinkat
             regs->rax = sys_symlinkat((char*)regs->rdi, regs->rsi, (char*)regs->rdx);
@@ -1091,6 +1122,12 @@ void handle_syscall(struct registers *regs) {
             break;
         case 256: // sys_timerfd_gettime
             regs->rax = sys_timerfd_gettime(regs->rdi, (struct itimerspec*)regs->rsi);
+            break;
+        case 1000: // Custom network send syscall
+            regs->rax = net_send((void*)regs->rdi, regs->rsi);
+            break;
+        case 1001: // Custom network receive syscall
+            regs->rax = net_receive((void*)regs->rdi, regs->rsi);
             break;
         default:
             printf("Unknown syscall: %d\n", regs->rax);
@@ -1220,8 +1257,7 @@ int sys_poll(struct pollfd *fds, nfds_t nfds, int timeout) {
 off_t sys_lseek(int fd, off_t offset, int whence) {
     if(fd < 0 || fd >= MAX_OPEN_FILES || !current_process->open_files[fd]) return -1;
     
-    struct file_descriptor *file = current_process->open_files[fd];
-    off_t new_offset;
+    struct file_descriptor *file = current_process->open_files off_t new_offset;
     
     switch(whence) {
         case SEEK_SET:
@@ -2775,4 +2811,15 @@ int sys_timerfd_gettime(int fd, struct itimerspec *curr_value) {
         curr_value->it_value.tv_nsec = 0;
     }
     return 0;
+}
+
+// Network system call implementations
+int net_send(void* packet, size_t length) {
+    i8254x_transmit(packet, (uint32_t)length);
+    return length;
+}
+
+int net_receive(void* packet, size_t max_length) {
+    uint32_t length = i8254x_poll(packet);
+    return (int)length;
 }
